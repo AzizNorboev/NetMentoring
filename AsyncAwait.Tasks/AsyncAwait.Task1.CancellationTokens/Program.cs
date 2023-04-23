@@ -8,11 +8,16 @@
 */
 
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AsyncAwait.Task1.CancellationTokens;
 
 internal class Program
 {
+    private static CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+    static bool previousCallFinished = true;
+
     /// <summary>
     /// The Main method should not be changed at all.
     /// </summary>
@@ -21,13 +26,13 @@ internal class Program
     {
         Console.WriteLine("Mentoring program L2. Async/await.V1. Task 1");
         Console.WriteLine("Calculating the sum of integers from 0 to N.");
-        Console.WriteLine("Use 'q' key to exit...");
+        Console.WriteLine("Use 'c' key to exit...");
         Console.WriteLine();
 
         Console.WriteLine("Enter N: ");
 
         var input = Console.ReadLine();
-        while (input.Trim().ToUpper() != "Q")
+        while (input.Trim().ToUpper() != "C")
         {
             if (int.TryParse(input, out var n))
             {
@@ -49,13 +54,30 @@ internal class Program
     private static void CalculateSum(int n)
     {
         // todo: make calculation asynchronous
-        var sum = Calculator.Calculate(n);
-        Console.WriteLine($"Sum for {n} = {sum}.");
-        Console.WriteLine();
-        Console.WriteLine("Enter N: ");
-        // todo: add code to process cancellation and uncomment this line    
-        // Console.WriteLine($"Sum for {n} cancelled...");
+        if (previousCallFinished == false)
+        {
+            cancellationTokenSource.Cancel();
+            cancellationTokenSource = new CancellationTokenSource();
+        }
+        previousCallFinished = false;
+        var token = cancellationTokenSource.Token;
 
         Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
+        Thread.Sleep(500);
+        var sumResult = Task.Run(() => Calculator.Calculate(n, token))
+            .ContinueWith((result) =>
+            {
+                if (result.Status == TaskStatus.RanToCompletion)
+                {
+                    Console.WriteLine($"Sum for {n} = {result.Result}.");
+                    previousCallFinished = true;
+                    Console.WriteLine();
+                    Console.WriteLine("Enter N: ");
+                }
+                else if (result.Status == TaskStatus.Canceled)
+                {
+                    Console.WriteLine($"Sum for {n} cancelled...");
+                }
+            });
     }
 }
