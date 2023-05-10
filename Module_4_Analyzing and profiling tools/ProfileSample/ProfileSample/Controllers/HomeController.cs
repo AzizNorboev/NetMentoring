@@ -1,64 +1,58 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Web;
-using System.Web.Mvc;
-using ProfileSample.DAL;
+﻿using ProfileSample.DAL;
 using ProfileSample.Models;
 
 namespace ProfileSample.Controllers
 {
     public class HomeController : Controller
     {
-        public ActionResult Index()
+        public async Task<ActionResult> Index()
         {
-            var context = new ProfileSampleEntities();
-
-            var sources = context.ImgSources.Take(20).Select(x => x.Id);
-            
-            var model = new List<ImageModel>();
-
-            foreach (var id in sources)
+            using (var context = new ProfileSampleEntities())
             {
-                var item = context.ImgSources.Find(id);
+                var model = await context.ImgSources
+                                         .AsNoTracking()
+                                         .Take(20)
+                                         .Select(x => new ImageModel
+                                         {
+                                             Name = x.Name,
+                                             Data = x.Data
+                                         })
+                                         .ToListAsync();
 
-                var obj = new ImageModel()
-                {
-                    Name = item.Name,
-                    Data = item.Data
-                };
-
-                model.Add(obj);
-            } 
-
-            return View(model);
+                return View(model);
+            }
         }
 
-        public ActionResult Convert()
+        public async Task<ActionResult> Convert()
         {
             var files = Directory.GetFiles(Server.MapPath("~/Content/Img"), "*.jpg");
 
             using (var context = new ProfileSampleEntities())
             {
+                var tasks = new List<Task>();
                 foreach (var file in files)
                 {
-                    using (var stream = new FileStream(file, FileMode.Open))
+                    tasks.Add(Task.Run(async () =>
                     {
-                        byte[] buff = new byte[stream.Length];
-
-                        stream.Read(buff, 0, (int) stream.Length);
-
-                        var entity = new ImgSource()
+                        using (var stream = new FileStream(file, FileMode.Open))
                         {
-                            Name = Path.GetFileName(file),
-                            Data = buff,
-                        };
+                            byte[] buff = new byte[stream.Length];
 
-                        context.ImgSources.Add(entity);
-                        context.SaveChanges();
-                    }
-                } 
+                            await stream.ReadAsync(buff, 0, (int)stream.Length);
+
+                            var entity = new ImgSource()
+                            {
+                                Name = Path.GetFileName(file),
+                                Data = buff,
+                            };
+
+                            context.ImgSources.Add(entity);
+                            await context.SaveChangesAsync();
+                        }
+                    }));
+                }
+
+                await Task.WhenAll(tasks);
             }
 
             return RedirectToAction("Index");
