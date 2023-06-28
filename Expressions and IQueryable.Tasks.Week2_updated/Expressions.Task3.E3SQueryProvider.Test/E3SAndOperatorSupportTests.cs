@@ -28,9 +28,7 @@ namespace Expressions.Task3.E3SQueryProvider.Test
 
             string translated = translator.Translate(expression);
 
-            Assert.Contains("Workstation:(EPRUIZHW006)", translated);
-            Assert.Contains("Manager:(John*)", translated);
-            Assert.Contains("AND", translated);
+            Assert.Equal("Workstation:(EPRUIZHW006) AND Manager:(John*)", translated);
         }
 
         #endregion
