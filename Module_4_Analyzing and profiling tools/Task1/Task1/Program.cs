@@ -18,6 +18,8 @@ Console.WriteLine(GeneratePasswordHashUsingSaltOptimized("Password", salt));
 watch1.Stop();
 var elapsedMs1 = watch1.ElapsedMilliseconds;
 Console.WriteLine(elapsedMs1);
+
+Console.ReadLine();
 static string GeneratePasswordHashUsingSalt(string passwordText, byte[] salt)
 {
     var iterate = 10000;
@@ -42,17 +44,13 @@ StringBuilder to concatenate the salt and hash bytes. This would avoid creating 
 */
 static string GeneratePasswordHashUsingSaltOptimized(string passwordText, byte[] salt)
 {
-    var iterate = 10000;
-    var hashSize = 32; // use a larger hash size for increased security
-    var pbkdf2 = new Rfc2898DeriveBytes(passwordText, salt, iterate);
-
-    byte[] hash = pbkdf2.GetBytes(hashSize);
-    StringBuilder hashBuilder = new StringBuilder();
-
-    hashBuilder.Append(Convert.ToBase64String(salt));
-    hashBuilder.Append(Convert.ToBase64String(hash));
-
-    var passwordHash = hashBuilder.ToString();
-
-    return passwordHash;
+    var iterations = 10000;
+    const int hashSize = 20;  //Instead of hardcoded values - better for code readability and maintainability
+    using (var pbkdf2 = new Rfc2898DeriveBytes(passwordText, salt, iterations))
+    {
+        //First of all you should get bytes (salt + hash) then to encode all these bytes to Base64
+        var passwordHashBytes = salt.Concat(pbkdf2.GetBytes(hashSize)).ToArray();
+        return Convert.ToBase64String(passwordHashBytes);
+    }
 }
+
