@@ -10,14 +10,15 @@
  */
 
 using System;
-using System.Diagnostics;
 using System.Threading;
 
 namespace MultiThreading.Task4.Threads.Join
 {
     class Program
     {
-        static Semaphore semaphoreSlim = new Semaphore(1, 1);
+        private const string MAIN_THREAD_NAME = "MAIN";
+        static readonly Semaphore semaphoreSlim = new Semaphore(1, 1);
+        private const int NUMBER_OF_ITERATIONS = 10;
         static void Main(string[] args)
         {
             Console.WriteLine("4.	Write a program which recursively creates 10 threads.");
@@ -29,66 +30,62 @@ namespace MultiThreading.Task4.Threads.Join
 
             Console.WriteLine();
 
+            Thread.CurrentThread.Name = MAIN_THREAD_NAME;
 
-            // Option a)
-            ThreadWithStateA tws = new ThreadWithStateA(10);
-
-            Thread t = new Thread(tws.Process);
-            t.Start();
-            t.Join();
-            // End of option a)
-
-            // Option b)
-            Console.WriteLine("Start of option b)");
-            var stateB = 10;
-            ThreadPool.QueueUserWorkItem(ProcessB, stateB);
-            // End of option b)
-
+            Console.WriteLine("Start of option a:");
+            ProcessA(NUMBER_OF_ITERATIONS);
+            
+            Console.WriteLine();
+            
+            Console.WriteLine("Start of option b:");
+            ProcessB(NUMBER_OF_ITERATIONS);
+            
             Console.ReadLine();
         }
-        public static void ProcessB(object state)
+
+        public static void ProcessA(object state)
         {
-            semaphoreSlim.WaitOne();
-            Thread.Sleep(100);
-            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, State before decrement: {state}");
-            state = (int)state - 1;
-            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, State after decrement: {state}");
+            var currentStateValue = (int)state;
+            var isCreatedThread = Thread.CurrentThread.Name != MAIN_THREAD_NAME;
+            var newStateValue = isCreatedThread ? currentStateValue - 1 : currentStateValue;
 
-            if ((int)state > 1)
+            if (isCreatedThread)
             {
-
-                ThreadPool.QueueUserWorkItem(ProcessB, state);
-
+                Console.WriteLine($"Thread with ID={Thread.CurrentThread.ManagedThreadId} has state={currentStateValue}");
             }
-            semaphoreSlim.Release();
-        }
-    }
 
-    public class ThreadWithStateA
-    {
-        private int _state;
-
-        // The constructor obtains the state information.
-        public ThreadWithStateA(int state)
-        {
-            _state = state;
-        }
-
-        public void Process()
-        {
-            Thread.Sleep(100);
-            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, State before decrement: {_state}");
-            _state = _state - 1;
-            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, State after decrement: {_state}");
-
-            if (_state > 1)
+            if (currentStateValue > 1)
             {
-                ThreadWithStateA tws = new ThreadWithStateA(_state);
-                Thread t = new Thread(tws.Process);
-                t.Start();
+                Thread t = new Thread(ProcessA);
+                t.Start(newStateValue);
                 t.Join();
             }
+        }
 
+        public static void ProcessB(object state)
+        {
+            var currentStateValue = (int)state;
+            var isCreatedThread = Thread.CurrentThread.Name != MAIN_THREAD_NAME;
+            var newStateValue = isCreatedThread ? currentStateValue -1 : currentStateValue;
+            var canContinue = currentStateValue > 1;
+
+            if (isCreatedThread)
+            {
+                if (canContinue)
+                {
+                    semaphoreSlim.WaitOne();
+                }
+                Console.WriteLine($"Thread with ID={Thread.CurrentThread.ManagedThreadId} has state={currentStateValue}");
+            }
+
+            if (canContinue)
+            {
+                ThreadPool.QueueUserWorkItem(ProcessB, newStateValue);
+                if (isCreatedThread)
+                {
+                    semaphoreSlim.Release();
+                }
+            }
         }
     }
 }

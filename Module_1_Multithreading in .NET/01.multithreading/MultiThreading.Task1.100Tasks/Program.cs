@@ -5,7 +5,6 @@
  */
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace MultiThreading.Task1._100Tasks
@@ -13,7 +12,8 @@ namespace MultiThreading.Task1._100Tasks
     class Program
     {
         const int TaskAmount = 100;
-        const int MaxIterationsCount = 10;
+        //Should be 1000
+        const int MaxIterationsCount = 1000;
 
         static void Main(string[] args)
         {
@@ -31,28 +31,24 @@ namespace MultiThreading.Task1._100Tasks
         static void HundredTasks()
         {
             Task[] taskArr = CreateTasks(TaskAmount);
-
-            foreach (var task in taskArr)
-            {
-                task.Start();
-            }
-
             Task.WaitAll(taskArr);
         }
 
-        private static Task[] CreateTasks(int n)
-        {
-            Task[] tasks = new Task[n];
-            var result = Enumerable.Range(0, n).Select(i => new Task(Iterate, i)).ToArray();
-            return result;
-        }
+        //Please name variables logically not just a,b,c,n,...
+        private static Task[] CreateTasks(int count) 
+            => Enumerable.Range(0, count).Select(i =>
+            {
+                var task = new Task(Iterate, i);
+                task.Start();
+                return task;
+            }).ToArray();
 
         private static void Iterate(object numberOfTask)
         {
-            for (int i = 0; i < MaxIterationsCount; i++)
+            //Be attentive you have to itterate from 1 to 1000 not from 0 to 999
+            for (int i = 1; i <= MaxIterationsCount; i++)
             {
-                Thread.Sleep(10);
-                Console.WriteLine($"Task #{numberOfTask} - {i}");
+                Console.WriteLine($"Task #{numberOfTask} - {i}.");
             }
         }
     }

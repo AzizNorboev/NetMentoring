@@ -7,14 +7,16 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace MultiThreading.Task5.Threads.SharedCollection
 {
     class Program
     {
-        private static List<int> _sharedCollection = new List<int>();
-        private static bool _isAddingCompleted = false;
+        private const int ELEMENTS_COUNT = 10;
+
+        private static readonly List<int> collection = new List<int>();
+        private static readonly ManualResetEventSlim event1 = new ManualResetEventSlim(true);
+        private static readonly ManualResetEventSlim event2 = new ManualResetEventSlim(false);
 
         static void Main(string[] args)
         {
@@ -23,45 +25,47 @@ namespace MultiThreading.Task5.Threads.SharedCollection
             Console.WriteLine("Use Thread, ThreadPool or Task classes for thread creation and any kind of synchronization constructions.");
             Console.WriteLine();
 
+            // feel free to add your code
 
+            Thread thread1 = new Thread(AddElements) { Name = "Thread 1", };
+            Thread thread2 = new Thread(PrintElements) { Name = "Thread 2" };
+            thread1.Start(ELEMENTS_COUNT);
+            thread2.Start(ELEMENTS_COUNT);
+            thread1.Join();
+            thread2.Join();
 
-            var task1 = Task.Run(() =>
-            {
-                for (int i = 1; i <= 10; i++)
-                {
-                    _sharedCollection.Add(i);
-                    Thread.Sleep(1000); //This is optional
-                }
-
-                _isAddingCompleted = true;
-
-            });
-
-            var task2 = Task.Run(() =>
-            {
-                int nextPrintedEkementIndex = 0;
-                while (_isAddingCompleted == false || nextPrintedEkementIndex < _sharedCollection.Count)
-                {
-                    if (nextPrintedEkementIndex < _sharedCollection.Count)
-                    {
-                        for (int j = 0; j <= nextPrintedEkementIndex; j++)
-                        {
-                            Console.Write($"{_sharedCollection[j]}");
-                            if (j < nextPrintedEkementIndex)
-                            {
-                                Console.Write(", ");
-                            }
-                        }
-                        Console.WriteLine();
-
-                        nextPrintedEkementIndex++;
-                    }
-                }
-            });
-
-            Task.WaitAll(task2);
+            Console.WriteLine("Finished!");
 
             Console.ReadLine();
         }
+
+        private static void AddElements(object elementsCount)
+        {
+            var count = (int)elementsCount;
+
+            for (int i = 1; i <= count; i++)
+            {
+                event1.Wait();
+                collection.Add(i);
+                Console.WriteLine($"{Thread.CurrentThread.Name} Added element {i} to the collection");
+                event1.Reset();
+                event2.Set();
+            }
+        }
+
+        private static void PrintElements(object elementsCount)
+        {
+            var count = (int)elementsCount;
+            while (collection.Count < count)
+            {
+                event2.Wait();
+                Console.Write($"{Thread.CurrentThread.Name} prints collection: ");
+                Console.WriteLine($"[{string.Join(",", collection)}]");
+                Console.WriteLine();
+                event2.Reset();
+                event1.Set();
+            }
+        }
+
     }
 }

@@ -13,8 +13,8 @@ namespace MultiThreading.Task2.Chaining
 {
     class Program
     {
-        static Random randNum = new Random();
-        static void Main(string[] args)
+        private const int ARRAY_SIZE = 10;
+        static async Task Main(string[] args)
         {
             Console.WriteLine(".Net Mentoring Program. MultiThreading V1 ");
             Console.WriteLine("2.	Write a program, which creates a chain of four Tasks.");
@@ -25,71 +25,66 @@ namespace MultiThreading.Task2.Chaining
             Console.WriteLine();
 
             // feel free to add your code
-            Task<int[]> taskCreate = new Task<int[]>(() => CreateArray(10));
-            taskCreate.Start();
-            taskCreate.Wait();
-            Console.WriteLine("Array created:");
-            DisplayArrayValues(taskCreate.Result);
+            await Task.Run(() =>
+            {
+                var array = CreateArray(ARRAY_SIZE);
+                OutputInfo("Initial array is", array);
+                return array;
+            })
+               .ContinueWith(x =>
+               {
+                   var randNum = new Random();
+                   var value = randNum.Next(1, 10);
+                   var array = Multiply(x.Result, value);
+                   OutputInfo($"Initial array multiplied by {value} is", array);
+                   return array;
+               })
+               .ContinueWith(x =>
+               {
+                   var array = SortArray(x.Result);
+                   OutputInfo("Sorted array is", array);           
+                   return array;
+               })
+               .ContinueWith(x =>
+               {
+                   var averageValue = GetAverage(x.Result);
+                   OutputInfo($"Average of the sorted array is {averageValue}", null);
+               });
 
-            Task<int[]> taskMultiply = new Task<int[]>(() => Multiply(taskCreate.Result));
-            taskMultiply.Start();
-            taskMultiply.Wait();
-            Console.WriteLine("Array multiplied by random number:");
-            DisplayArrayValues(taskMultiply.Result);
-
-            Task<int[]> taskSortAsc = new Task<int[]>(() => SortArray(taskMultiply.Result));
-            taskSortAsc.Start();
-            taskSortAsc.Wait();
-            Console.WriteLine("Array sorted:");
-            DisplayArrayValues(taskSortAsc.Result);
-
-            Task<double> taskAverage = new Task<double>(() => GetAverage(taskSortAsc.Result));
-            taskAverage.Start();
-            taskAverage.Wait();
-            Console.WriteLine("Average of array:");
-            Console.WriteLine(taskAverage.Result);
             Console.ReadLine();
         }
 
-        private static int[] CreateArray(int count)
-        {
-            int[] test2 = new int[count];
+        private static int[] CreateArray(int count) {
 
-            for (int i = 0; i < test2.Length; i++)
+            var rnd = new Random();
+            var array = new int[count];
+            for (int i = 0; i < count; i++)
             {
-                test2[i] = randNum.Next(0, 99);
-            }
-            return test2;
-        }
-
-        private static int[] Multiply(int[] array)
-        {
-            for (int i = 0; i < array.Length; i++)
-            {
-                array[i] *= randNum.Next(1, 10);
+                array[i] = rnd.Next(0, 99);
             }
             return array;
         }
 
+        //You shouldn't modify the source array 
+        private static int[] Multiply(int[] array, int val)
+        {
+            int[] multiple = new int[array.Length];
+            for (int i = 0; i < array.Length; i++)
+            {
+                multiple[i] = array[i] * val;
+            }
+    
+            return multiple;
+        }
+
+        //You shouldn't modify the source array 
         private static int[] SortArray(int[] array)
-        {
-            Array.Sort(array);
-            return array;
-        }
+            => array.OrderBy(i => i).ToArray();
 
-        private static double GetAverage(int[] array)
-        {
-            return (from num in array
-                   select num).Average();
-        }
+        private static double GetAverage(int[] array) 
+            => array.Average(i => i);
 
-        private static void DisplayArrayValues(int[] array)
-        {
-            for (int i = 0; i < array.Length; i++)
-            {
-                Console.Write($"{array[i]} ");
-            }
-            Console.WriteLine(Environment.NewLine);
-        }
+        private static void OutputInfo(string text, int[] array)
+            => Console.WriteLine($"{text} {(array == null ? string.Empty : $"[{string.Join(", ", array)}]")}.");
     }
 }

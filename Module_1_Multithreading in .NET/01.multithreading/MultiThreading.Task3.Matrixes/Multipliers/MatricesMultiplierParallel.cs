@@ -11,10 +11,12 @@ namespace MultiThreading.Task3.MatrixMultiplier.Multipliers
             var resultMatrix = new Matrix(m1.RowCount, m2.ColCount);
             Parallel.For(0, m1.RowCount, i =>
             {
-                for (byte j = 0; j < m2.ColCount; j++)
+                //Why did you use byte type here?
+                for (var j = 0; j < m2.ColCount; j++)
                 {
                     long sum = 0;
-                    for (byte k = 0; k < m1.ColCount; k++)
+                    //Why did you use byte type here?
+                    for (var k = 0; k < m1.ColCount; k++)
                     {
                         sum += m1.GetElement(i, k) * m2.GetElement(k, j);
                     }
