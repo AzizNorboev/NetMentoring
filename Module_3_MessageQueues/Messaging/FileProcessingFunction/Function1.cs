@@ -1,49 +1,35 @@
 using System;
-using Microsoft.Azure.ServiceBus;
 using System.IO;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Extensions.Logging;
 using Azure.Storage.Blobs;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using System.Configuration;
-using System.Linq;
-using System.Security.Policy;
 
 namespace FileProcessingFunction
 {
     public class Function1
     {
-        [FunctionName("Function1")]
-        public async Task Run([ServiceBusTrigger("image-queue", Connection = "ConnectionStringToImageQueue")] string message, ILogger log)
-        {
-            log.LogInformation($"C# ServiceBus queue trigger function processed message: {message}");
+        private const string BlobStorageConnectionStringKey = "BlobStorageConnectionString";
+        private const string BlobFileStorageContainerNameKey = "BlobFileStorageContainerName";
 
+        [FunctionName("CombineChunksAndUpload")]
+        public static async Task Run(
+            [ServiceBusTrigger("image-queue", Connection = "ConnectionStringToImageQueue")] byte[] message,
+            ILogger log)
+        {
             try
             {
-                // Determine if it's an image or video based on the file extension
-                bool isImage = IsImageFile(message);
+                // Retrieve the message properties
+                string fileName = $"{DateTime.UtcNow.ToString("yyyy-MM-dd-HH-mm-ss-fff")}.mp4";
+                int totalChunks = 1; // Update with the total number of chunks
+                int currentChunk = 1; // Update with the current chunk number
 
-                // Get a reference to the Blob Storage container
-                string blobConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
-                BlobServiceClient blobServiceClient = new BlobServiceClient(blobConnectionString);
-                string containerName = Environment.GetEnvironmentVariable("BlobImageStorageContainerName");
-                BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+                // Combine the chunks into a single file. But not working...
+                string combinedFilePath = await CombineChunks(fileName, totalChunks, currentChunk, message);
 
-                // Generate a unique blob name based on the current date and time
-                string fileExtension = isImage ? ".mp4": ".png";
-                string blobName = $"{DateTime.UtcNow.ToString("yyyy-MM-dd-HH-mm-ss")}{fileExtension}";
+                await UploadFileToBlobStorage(combinedFilePath, fileName, log);
 
-                // Upload the file to Blob Storage
-                byte[] fileBytes = await GetFileBytesAsync(message); 
-                BlobClient blobClient = containerClient.GetBlobClient(blobName);
-                using (MemoryStream stream = new MemoryStream(fileBytes))
-                {
-                    await blobClient.UploadAsync(stream, true);
-                }
-
-                log.LogInformation($"Saved {blobName} to Blob Storage");
+                File.Delete(combinedFilePath);
             }
             catch (Exception ex)
             {
@@ -51,42 +37,44 @@ namespace FileProcessingFunction
             }
         }
 
-        private async Task<byte[]> GetFileBytesAsync(string message)
+        private static async Task<string> CombineChunks(string fileName, int totalChunks, int currentChunk, byte[] chunkData)
         {
-            if(IsImageFile(message))
+            string tempDirectory = Path.GetTempPath();
+            string combinedFileName = Path.GetFileNameWithoutExtension(fileName) + "_combined" + Path.GetExtension(fileName);
+            string combinedFilePath = Path.Combine(tempDirectory, combinedFileName);
+
+            // Append the chunk to the combined file
+            using (FileStream combinedStream = new FileStream(combinedFilePath, FileMode.Append))
             {
-                int lastSlashIndex = message.LastIndexOf('/');
-
-                // Extract the blob name from the URI
-                string blobName = message.Substring(lastSlashIndex + 1);
-
-                string storageConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
-                BlobServiceClient blobServiceClient = new BlobServiceClient(storageConnectionString);
-                string containerName = Environment.GetEnvironmentVariable("BlobVideosStorageContainerName");
-                BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
-
-                // Download the blob content
-                BlobClient blobClient = containerClient.GetBlobClient(blobName);
-                using (MemoryStream stream = new MemoryStream())
-                {
-                    await blobClient.DownloadToAsync(stream);
-                    return stream.ToArray();
-                }
+                await combinedStream.WriteAsync(chunkData, 0, chunkData.Length);
             }
-            else
+
+            // Check if all chunks have been received
+            if (currentChunk == totalChunks)
             {
-                return Convert.FromBase64String(message);
+                return combinedFilePath; // Return the combined file path when all chunks are received
             }
-            
+
+            return null; // Return null to indicate that the file is not yet complete
         }
 
-        private bool IsImageFile(string message)
+        private static async Task UploadFileToBlobStorage(string filePath, string fileName, ILogger log)
         {
-            string fileExtension = message;
+            string blobConnectionString = Environment.GetEnvironmentVariable(BlobStorageConnectionStringKey);
+            string containerName = Environment.GetEnvironmentVariable(BlobFileStorageContainerNameKey);
 
-            string[] imageExtensions = { ".mp4" };
+            BlobServiceClient blobServiceClient = new BlobServiceClient(blobConnectionString);
+            BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
 
-            return imageExtensions.Contains(fileExtension, StringComparer.OrdinalIgnoreCase);
+            BlobClient blobClient = containerClient.GetBlobClient(fileName);
+
+            using (FileStream fileStream = File.OpenRead(filePath))
+            {
+                await blobClient.UploadAsync(fileStream, overwrite: true);
+            }
+
+            log.LogInformation($"Uploaded file {fileName} to Blob Storage.");
         }
     }
 }
+
